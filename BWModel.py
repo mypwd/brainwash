@@ -2,14 +2,17 @@ import wx
 import wx.dataview as dv
 import operator
 from pubsub import pub
-
-
+import sqlite3
+import os, re
+import time
         
 class BWModel(dv.DataViewIndexListModel):
     def __init__(self):
         self.data = []
         dv.DataViewIndexListModel.__init__(self, len(self.data))
-
+        self.db = None
+        self.db_conn = None
+        self.db_curr = None
     def AddRow(self, value):
         self.data.append(value)
         self.RowAppended()
@@ -71,4 +74,57 @@ class BWModel(dv.DataViewIndexListModel):
             # notify the view(s) using this model that it has been removed
             self.RowDeleted(row)
 
+    def data_clear(self):
+        rows = []
+        for i in range(0,len(self.data)):
+            rows.append(i)
+            
+        wx.CallAfter(self.DeleteRows, rows)
+        
+    def create_db(self, db_name):
+        if not self.db_conn == None:
+            self.db_conn.close()
+            self.db_conn = None
+            self.data_clear()
+        self.db = 'db/'+db_name+'.db'
+
+        if os.access(self.db, os.F_OK) :
+            return -1                     # file exists
+        try:
+            query = "create table  if not exists question(idx integer primary key autoincrement, ts int, question text, level int)"
+            self.db_conn = sqlite3.connect(self.db, check_same_thread=False)
+            self.db_curr = self.db_conn.cursor()
+            self.db_curr.execute(query)
+            query = "create table if not exists solution(idx  integer primary key autoincrement, ts int, solution text, question_id int)"
+            self.db_curr.execute(query)
+            query = "create table if not exists test(idx  integer primary key autoincrement, ts int, level int, subject text)"
+            self.db_curr.execute(query)
+            query = "create table if not exists answer(idx  integer primary key autoincrement, ts int, answer text, question_ids int, test_idx int, result int)"
+            self.db_curr.execute(query)
+            self.db_conn.commit()
+        except:
+            return -2                     # db fail
+
+        return 0
+    def open_db(self, db_name):
+        
+        if not os.access(db_name, os.F_OK) :
+            return -1                     # file not exists
+        if not self.db_conn == None:
+            self.db_conn.close()
+            self.db_conn = None
+            self.data_clear()
+        self.db = db_name    
+        self.db_conn = sqlite3.connect(self.db, check_same_thread=False)
+        self.db_curr = self.db_conn.cursor()
+        
+        return 0
+    def add_question(self, q, s, l):
+        ts = time.time()
+        
+        self.db_curr.execute("insert into question (ts, question, level) values (?, ?, ?)",(ts, q, l))
+        qidx = self.db_curr.lastrowid
+        self.db_curr.execute("insert into solution (ts, solution, question_id) values (?, ?, ?)",(ts, s, qidx))
+        self.db_conn.commit()
+    
         

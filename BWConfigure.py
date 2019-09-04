@@ -3,6 +3,9 @@ import os.path
 import json
 
 DEFAULT_CONF_FILE='_conf.json'
+DEFAULT_DB_FILE='db/default.db'
+
+
 class BWConfigure:
     def __init__(self, conffile = ''):
         self.conf = None
@@ -12,7 +15,7 @@ class BWConfigure:
             _conffile = DEFAULT_CONF_FILE
         else :
             _conffile = conffile
-
+        print('11')
         if os.path.exists(_conffile) == False:
             print('Error : Configuration load fail\n')
             exit(2)
@@ -27,14 +30,20 @@ class BWConfigure:
         res = -1
         with open(path) as f:
             raw = f.read()
+        
             try:
                 self.conf = json.loads(raw)
                 res = 0
             except:
                 res = -1
-                
+        if not 'db' in self.conf:
+            self.conf['db'] = DEFAULT_DB_FILE
+            
+        print(self.conf['db'])
+        
         if res == -1:
             return -1
         else:
             return 0
+        
         

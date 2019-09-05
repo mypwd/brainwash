@@ -1,7 +1,7 @@
 
 import os.path
 import json
-
+from BWMisc import *
 DEFAULT_CONF_FILE='_conf.json'
 DEFAULT_DB_FILE='db/default.db'
 
@@ -15,7 +15,7 @@ class BWConfigure:
             _conffile = DEFAULT_CONF_FILE
         else :
             _conffile = conffile
-        print('11')
+            
         if os.path.exists(_conffile) == False:
             print('Error : Configuration load fail\n')
             exit(2)
@@ -23,8 +23,13 @@ class BWConfigure:
             if self.load_config(_conffile) < 0 :
                 print('Error : Configuration load fail\n')
                 exit(2)
-
-
+        self.conffile = _conffile
+    def set_used_db(self, db):
+        self.conf['db'] = db
+    def get_used_db(self):
+        if os.access(self.conf['db'], os.F_OK) :
+            return self.conf['db']
+        return None
     def load_config(self, path):
         raw = ''
         res = -1
@@ -46,4 +51,6 @@ class BWConfigure:
         else:
             return 0
         
+    def save(self):
+        BWMisc().save_json_file(self.conffile, self.conf)
         

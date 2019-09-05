@@ -24,6 +24,14 @@ class DisplayCommon:
         for l in lst:
             sizer.Add(l, 1)
         return sizer
+    def errormsg(self, msg):
+        dlg = wx.MessageDialog(self, msg,
+                               'BrainWash',
+                               wx.OK | wx.ICON_INFORMATION
+                               #wx.YES_NO | wx.NO_DEFAULT | wx.CANCEL | wx.ICON_INFORMATION
+        )
+        dlg.ShowModal()
+        dlg.Destroy()
 
 
 class BWNoteList(wx.Panel, DisplayCommon):
@@ -37,17 +45,18 @@ class BWNoteList(wx.Panel, DisplayCommon):
                                    )
 
 
-        self.dvc.AppendTextColumn('id', 1, width=100)
-        self.dvc.AppendTextColumn('question', 2, width=300)
-        self.dvc.AppendTextColumn('level', 3, width=100)
-        self.dvc.AppendTextColumn('date', 4, width=100)
+        self.dvc.AppendTextColumn('id', 0, width=100)
+        self.dvc.AppendTextColumn('question', 1, width=300)
+        self.dvc.AppendTextColumn('level', 2, width=100)
+        self.dvc.AppendTextColumn('date', 3, width=100)
 
         
         for c in self.dvc.Columns:
             c.Sortable = True
             c.Reorderable = True
+        self.dvc.Bind(dv.EVT_DATAVIEW_SELECTION_CHANGED, self.onSelect)
 
-        self.add_btn = wx.Button(self, wx.ID_ANY, "추가")
+        self.add_btn = wx.Button(self, wx.ID_ANY, "새글")
         self.rm_btn = wx.Button(self, wx.ID_ANY, "제거")
         self.mod_btn = wx.Button(self, wx.ID_ANY, "수정")
         s = self.wrap_horizontal_sizer([self.add_btn, self.rm_btn, self.mod_btn])
@@ -59,19 +68,19 @@ class BWNoteList(wx.Panel, DisplayCommon):
         
         question_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Question")
         self.question_tb = wx.TextCtrl(self, -1, size=(600, 60), style=wx.TE_MULTILINE|wx.TE_PROCESS_ENTER|wx.TE_BESTWRAP)
-        
+        self.question_tb.SetBackgroundColour(wx.LIGHT_GREY)
         question_box.Add(self.question_tb, 10, wx.LEFT|wx.RIGHT | wx.EXPAND, 5)
-
+        
         solution_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Solution")
         self.solution_tb = wx.TextCtrl(self, -1, size=(600, 60), style=wx.TE_MULTILINE|wx.TE_PROCESS_ENTER|wx.TE_BESTWRAP)
-        
+        self.solution_tb.SetBackgroundColour(wx.LIGHT_GREY)
         solution_box.Add(self.solution_tb, 10, wx.LEFT|wx.RIGHT | wx.EXPAND, 5)
         self.level_cb = wx.ComboBox(self, id=wx.ID_ANY, style=wx.CB_DROPDOWN, size=(200,30))
         for i in range(1,11):
             self.level_cb.Append('Level{}'.format(i), i)
         self.level_cb.SetSelection(0)
 
-        self.submit_btn = wx.Button(self, wx.ID_ANY, "제출")
+        self.submit_btn = wx.Button(self, wx.ID_ANY, "추가")
         self.submit_btn.Bind(wx.EVT_BUTTON, self.onSubmit)
         self.submit_btn.Enable(False)
         l = self.wrap_horizontal_sizer([self.level_cb, self.submit_btn])
@@ -90,10 +99,29 @@ class BWNoteList(wx.Panel, DisplayCommon):
         pass
     def set_model(self, model):
         self.dvc.AssociateModel(model)
+    def set_question(self, data):
+        self.question_tb.SetBackgroundColour(wx.Colour(0xeb, 0xee, 0xd0))
+        self.solution_tb.SetBackgroundColour(wx.Colour(0xeb, 0xee, 0xd0))
+
+        self.question_tb.Clear()
+        self.question_tb.SetValue(data[2])
+        self.solution_tb.Clear()
+        self.solution_tb.SetValue(data[3])
+        self.level_cb.SetSelection(data[4])
+
+        self.submit_btn.Enable(False)
+        self.mod_btn.Enable(True)
+        self.rm_btn.Enable(True)
     def onAdd(self, evt):
         self.question_tb.Clear()
+        self.question_tb.SetBackgroundColour(wx.Colour(0xc3, 0xed, 0xba))
         self.solution_tb.Clear()
+        self.solution_tb.SetBackgroundColour(wx.Colour(0xc3, 0xed, 0xba))
+
         self.submit_btn.Enable(True)
+        self.mod_btn.Enable(False)
+        self.rm_btn.Enable(False)
+        
     def onModify(self, evt):
         print('mod')
     def onRemove(self, evt):
@@ -103,8 +131,20 @@ class BWNoteList(wx.Panel, DisplayCommon):
         s = self.solution_tb.GetValue()
         l = self.level_cb.GetSelection()
         print(q,s,l)
+        if len(q) < 4 or len(s) < 4:
+            self.errormsg('4글자 이상 채워주세요')
+            return
         pub.sendMessage('add_question', question=q, solution=s, level = l)
-
+    def onSelect(self, evt):
+        try:
+            item = evt.GetItem()
+            model = self.dvc.GetModel()
+            row = model.GetRow(item)
+            print('row', row)
+            pub.sendMessage('question_selected', row=row)
+        except:
+            pass
+        
         
 class BWNoteTraining(wx.Panel):
     def __init__(self, parent):
@@ -146,7 +186,7 @@ class BWNoteResult(wx.Panel):
         pass
 
 
-class BWDisplay(wx.Frame):
+class BWDisplay(wx.Frame, DisplayCommon):
   
     def __init__(self):
         wx.Frame.__init__(self, None, 1001, 'Brain Wash',
@@ -239,7 +279,7 @@ class BWDisplay(wx.Frame):
            "All files (*.*)|*.*"
         dlg = wx.FileDialog(
             self, message="Choose a file",
-            defaultDir=os.getcwd(),
+            defaultDir=os.getcwd() + '/db',
             defaultFile="",
             wildcard=wildcard,
             style=wx.FD_OPEN | 
@@ -251,15 +291,9 @@ class BWDisplay(wx.Frame):
         dlg.Destroy()
         if len(path):
             pub.sendMessage('open_db', db=path)
-    def errormsg(self, msg):
-        dlg = wx.MessageDialog(self, msg,
-                               'BrainWash',
-                               wx.OK | wx.ICON_INFORMATION
-                               #wx.YES_NO | wx.NO_DEFAULT | wx.CANCEL | wx.ICON_INFORMATION
-        )
-        dlg.ShowModal()
-        dlg.Destroy()
 
     def set_model(self, model):
         self.nb_list.set_model(model)
 
+    def set_question(self, data):
+        self.nb_list.set_question(data)

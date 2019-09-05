@@ -5,6 +5,7 @@ from pubsub import pub
 import sqlite3
 import os, re
 import time
+from datetime import datetime
         
 class BWModel(dv.DataViewIndexListModel):
     def __init__(self):
@@ -32,7 +33,7 @@ class BWModel(dv.DataViewIndexListModel):
 
     # TODO 데이터 입력전에는 알 수 없음
     def GetColumnCount(self):
-        return 3
+        return 4
 
     # 
     def GetCount(self):
@@ -119,12 +120,53 @@ class BWModel(dv.DataViewIndexListModel):
         self.db_curr = self.db_conn.cursor()
         
         return 0
+    def load_db(self):
+        query = "select * from question"
+        self.db_curr.execute(query)
+        rows = self.db_curr.fetchall()
+
+        for row in rows:
+            wx.CallAfter(self.AddRow, [str(row[0]), row[2], str(row[3]),datetime.fromtimestamp(row[1]).strftime('%Y %m-%d')])
     def add_question(self, q, s, l):
         ts = time.time()
+        qidx = None
+        try:
+            self.db_curr.execute("insert into question (ts, question, level) values (?, ?, ?)",(ts, q, l))
+            qidx = self.db_curr.lastrowid
+            self.db_curr.execute("insert into solution (ts, solution, question_id) values (?, ?, ?)",(ts, s, qidx))
+            self.db_conn.commit()
+        except:
+            return -1
+        print('qidx',qidx)
+        wx.CallAfter(self.AddRow, [str(qidx), q, str(l), datetime.fromtimestamp(ts).strftime('%Y %m-%d')])
+        return 0
         
-        self.db_curr.execute("insert into question (ts, question, level) values (?, ?, ?)",(ts, q, l))
-        qidx = self.db_curr.lastrowid
-        self.db_curr.execute("insert into solution (ts, solution, question_id) values (?, ?, ?)",(ts, s, qidx))
-        self.db_conn.commit()
+    def get_question_by_row(self, row):
+        i = None
+        print('row',row)
+        try:
+            r = self.data[row]
+
+            i = r[0]
+        except:
+            return None
+        print('try')
+        query = "select * from question where idx='{}'".format(i)
+        print(query)
+        self.db_curr.execute(query)
+        print('exec')
+        row = self.db_curr.fetchone()
+        print('fetch')
+        q = row[2]
+        l = row[3]
+        t = row[1]
+        idx = row[0]
+        
+        query = "select solution from solution where question_id='{}'".format(idx)
+        print(query)
+        self.db_curr.execute(query)
+        row = self.db_curr.fetchone()
+        s = row[0]
+        
+        return idx, t, q, s, l
     
-        

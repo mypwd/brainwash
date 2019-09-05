@@ -140,7 +140,26 @@ class BWModel(dv.DataViewIndexListModel):
         print('qidx',qidx)
         wx.CallAfter(self.AddRow, [str(qidx), q, str(l), datetime.fromtimestamp(ts).strftime('%Y %m-%d')])
         return 0
-        
+
+    def mod_question(self, row, q, s, l):
+        i = None
+        print('row',row)
+        try:
+            r = self.data[row]
+
+            i = r[0]
+        except:
+            return -1
+
+        self.db_curr.execute("update question set question = ?, level = ? where idx= ?", (q, l, i))
+        self.db_curr.execute("update solution set solution = ? where question_id = ?", (s, i))
+        self.db_conn.commit()
+
+        self.data[row][1] = q
+        self.data[row][2] = str(l)
+
+        wx.CallAfter(self.RowChanged, row)
+        return 0
     def get_question_by_row(self, row):
         i = None
         print('row',row)

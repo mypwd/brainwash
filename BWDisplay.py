@@ -123,9 +123,19 @@ class BWNoteList(wx.Panel, DisplayCommon):
         self.rm_btn.Enable(False)
         
     def onModify(self, evt):
-        print('mod')
+        item = self.dvc.GetSelection()
+        model = self.dvc.GetModel()
+        row = model.GetRow(item)
+        q = self.question_tb.GetValue()
+        s = self.solution_tb.GetValue()
+        l = self.level_cb.GetSelection()
+        pub.sendMessage('mod_question', row = row, question = q, solution = s, level = l)
     def onRemove(self, evt):
-        print('rem')
+        item = self.dvc.GetSelection()
+        model = self.dvc.GetModel()
+        row = model.GetRow(item)
+        
+
     def onSubmit(self, evt):
         q = self.question_tb.GetValue()
         s = self.solution_tb.GetValue()

@@ -24,6 +24,7 @@ class BWControl:
         pub.subscribe(self.do_new_db, 'new_db')
         pub.subscribe(self.do_open_db, 'open_db')
         pub.subscribe(self.do_add_question, 'add_question')
+        pub.subscribe(self.do_mod_question, 'mod_question')
         pub.subscribe(self.do_question_seletected, 'question_selected')
         
     def do_new_db(self, db):
@@ -47,6 +48,11 @@ class BWControl:
             wx.CallAfter( self.display.errormsg, msg = 'DB Error')
             return
 
+    def do_mod_question(self, row, question, solution, level):
+        ret = self.model.mod_question(row, question, solution, level)
+        if ret < 0 :
+            wx.CallAfter( self.display.errormsg, msg = 'DB Error')
+            return
         
     def do_question_seletected(self, row):
         print('do')

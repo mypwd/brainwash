@@ -7,7 +7,7 @@ from pubsub.utils.notification import useNotifyByWriteFile
 
 class BWControl:
     def __init__(self):
-
+        
         self.configure = BWConfigure()
         self.subscribe_all()        
         self.display = BWDisplay()

@@ -10,11 +10,14 @@ import os
 import ctypes
 import wx.py as py
 
-os = 'linux'
+osp = 'linux'
 if sys.platform.startswith("win"):
-    os = 'win'
+    osp = 'win'
 
 def main():
+    if not os.access('db', F_OK):
+        os.mkdir('db')
+        
     app = wx.App(False)
     control = BWControl()
     app.MainLoop()

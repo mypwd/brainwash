@@ -33,7 +33,12 @@ class DisplayCommon:
         dlg.ShowModal()
         dlg.Destroy()
 
-
+    def background_green(self, tc, start, end):
+        print('start', start)
+        print('end', end)
+        
+        tc.SetStyle(start, end, wx.TextAttr(wx.NullColour, wx.Colour(0xdc, 0xf3, 0xc2)))
+        
 class BWNoteList(wx.Panel, DisplayCommon):
     def __init__(self, parent):
         wx.Panel.__init__(self,parent=parent, id=wx.ID_ANY)
@@ -126,19 +131,19 @@ class BWNoteList(wx.Panel, DisplayCommon):
         item = self.dvc.GetSelection()
         model = self.dvc.GetModel()
         row = model.GetRow(item)
-        q = self.question_tb.GetValue()
-        s = self.solution_tb.GetValue()
+        q = self.question_tb.GetValue().strip()
+        s = self.solution_tb.GetValue().strip()
         l = self.level_cb.GetSelection()
         pub.sendMessage('mod_question', row = row, question = q, solution = s, level = l)
     def onRemove(self, evt):
         item = self.dvc.GetSelection()
         model = self.dvc.GetModel()
         row = model.GetRow(item)
-        
+        pub.sendMessage('del_question', row = row)
 
     def onSubmit(self, evt):
-        q = self.question_tb.GetValue()
-        s = self.solution_tb.GetValue()
+        q = self.question_tb.GetValue().strip()
+        s = self.solution_tb.GetValue().strip()
         l = self.level_cb.GetSelection()
         print(q,s,l)
         if len(q) < 4 or len(s) < 4:
@@ -156,19 +161,127 @@ class BWNoteList(wx.Panel, DisplayCommon):
             pass
         
         
-class BWNoteTraining(wx.Panel):
+class BWNoteTraining(wx.Panel, DisplayCommon):
     def __init__(self, parent):
         wx.Panel.__init__(self,parent=parent, id=wx.ID_ANY)
         sizer = wx.BoxSizer(wx.VERTICAL)
+        self.curr_question_idx = None
+        self.confirm_toggle = 1
+        # 상단
+        self.under_cb = wx.CheckBox(self, -1, "Under", style=wx.ALIGN_RIGHT)
+
+        self.level_cb = wx.ComboBox(self, id=wx.ID_ANY, style=wx.CB_DROPDOWN, size=(200,30))
+        for i in range(1,11):
+            self.level_cb.Append('Level{}'.format(i), i)
+        self.level_cb.SetSelection(0)
+        self.total = wx.StaticText(self, id=wx.ID_ANY, label="Total : ", style=wx.ALIGN_LEFT)
+        s = self.wrap_horizontal_sizer([self.under_cb, self.level_cb, self.total])
+
+        # 상단 bind
+        self.Bind(wx.EVT_COMBOBOX, self.filter_change, self.level_cb)
+        self.Bind(wx.EVT_CHECKBOX, self.filter_change, self.under_cb)
+        
+        question_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Question")
+        self.id = wx.StaticText(self, id=wx.ID_ANY, label=" ", style=wx.ALIGN_LEFT)
+        ifont = wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        #ifont = wx.Font(13)
+        self.id.SetFont(ifont)
+        
+        self.question = wx.StaticText(self, id=wx.ID_ANY, label=" ", style=wx.ALIGN_LEFT)
+        qfont = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        #qfont = wx.Font(20)
+        self.question.SetFont(qfont)
+        question_box.Add(self.id, 1, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND, 5)
+        question_box.Add(self.question, 4, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND, 5)
+
+        # result
+        result_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Result")
+        self.result_tb = wx.TextCtrl(self, -1, size=(600, 60), style=wx.TE_MULTILINE|wx.TE_PROCESS_ENTER|wx.TE_BESTWRAP | wx.TE_RICH2)
+        result_box.Add(self.result_tb,1, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND, 5)
+        
+        answer_box = wx.StaticBoxSizer(wx.VERTICAL, self, "Answer")
+        self.answer_tb = wx.TextCtrl(self, -1, size=(600, 60), style=wx.TE_MULTILINE|wx.TE_PROCESS_ENTER|wx.TE_BESTWRAP)
+        self.answer_tb.Enable(True)
+        #self.answer_tb.SetBackgroundColour(wx.LIGHT_GREY)
+        self.answer_tb.SetFocus()
+        #self.answer_tb.SetBackgroundColour(wx.LIGHT_GREY)
+        answer_box.Add(self.answer_tb, 10, wx.LEFT|wx.RIGHT | wx.EXPAND, 5)
+        
+        self.submit_btn = wx.Button(self, wx.ID_ANY, "확인")
+        self.next_btn = wx.Button(self, wx.ID_ANY, "다음")
+        s1 = self.wrap_horizontal_sizer([ self.submit_btn, self.next_btn ])
+        self.submit_btn.Bind(wx.EVT_BUTTON, self.onConfirm)
+        self.next_btn.Bind(wx.EVT_BUTTON, self.onNext)
+
+        self.Bind(wx.EVT_TEXT_ENTER, self.onEnter, self.answer_tb)
+        sizer.Add(s,  1, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND, 5)        
+        sizer.Add(question_box,  3, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND,5)
+        sizer.Add(result_box,  3, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND,5)
+        
+        sizer.Add(answer_box, 3, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND,5)
+        sizer.Add(s1, 1, wx.LEFT|wx.RIGHT |wx.TOP|wx.BOTTOM| wx.EXPAND,5)        
         
         self.SetSizer(sizer)
 
+
     def initialize(self):
-        pass
+        self.filter_change(None)
         
     def thread_stop(self):
         pass
 
+    def filter_change(self, evt):
+        under = False
+        if self.under_cb.IsChecked() :
+            under = True
+        level = self.level_cb.GetSelection()
+        pub.sendMessage('filter_changed', under = under, level = level)
+    def update_counter(self, count):
+        self.total.SetLabel("Total : {}".format(count))
+    def update_question(self, idx, q):
+        self.curr_question_idx = idx
+        idt = "ID : {}".format(idx)
+        self.id.SetLabel(idt)
+        self.question.SetLabel(q)
+        self.answer_tb.SetBackgroundColour(wx.Colour(0xc3, 0xed, 0xba))
+        self.answer_tb.Enable(True)
+        self.answer_tb.SetFocus()
+        self.confirm_toggle = 0
+    def update_result(self, solution, answer, score, match):
+        self.result_tb.Clear()
+        sc = score * 100
+        self.result_tb.write('Score : {}\n'.format(sc))
+        
+        self.result_tb.write(solution+'\n')
+        a_start = self.result_tb.GetInsertionPoint()
+        self.result_tb.write(answer+'\n')
+        a_end = self.result_tb.GetInsertionPoint()
+
+        for block in match:
+            self.background_green(self.result_tb, a_start + block[1], a_start + block[1] + block[2])
+            print('1', block[1], block[2])
+        #self.background_green(self.result_tb, answer_start, answer_end)
+        self.confirm_toggle = 1
+
+    def onNext(self, evt):
+        self.result_tb.Clear()
+        self.answer_tb.Clear()
+        pub.sendMessage('training_next')
+    def onConfirm(self, evt):
+        ans = self.answer_tb.GetValue().strip()
+        if len(ans) == 0 or self.curr_question_idx == None:
+            self.errormsg('질문이 없거나 답이 불충분 합니다.')
+            return
+        pub.sendMessage('training_confirm', idx=self.curr_question_idx, answer = ans)
+    def onEnter(self, evt):
+        if self.confirm_toggle == 0:
+            self.confirm_toggle = 1
+            self.onConfirm(None)
+        else:
+            self.confirm_toggle = 0
+            self.onNext(None)
+            
+        
 class BWNoteTest(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self,parent=parent, id=wx.ID_ANY)
@@ -201,12 +314,7 @@ class BWDisplay(wx.Frame, DisplayCommon):
     def __init__(self):
         wx.Frame.__init__(self, None, 1001, 'Brain Wash',
                           size=(700, 700))
-        self.initialize()
-        self.Centre()
-        self.Layout()
-        self.Show()
-        
-    def initialize(self):
+
         p = wx.Panel(self, style = wx.BORDER_NONE)
         self.main_sizer = wx.BoxSizer()
         self.init_toolbar()
@@ -225,6 +333,13 @@ class BWDisplay(wx.Frame, DisplayCommon):
         #sizer = wx.BoxSizer(wx.VERTICAL)
 
         self.SetSizer(self.main_sizer)
+
+        self.Centre()
+        self.Layout()
+        self.Show()
+        
+    def initialize(self):
+        self.nb_training.initialize()
     def init_toolbar(self):
         self.tb = self.CreateToolBar()
         tsize = (24,24)

@@ -6,7 +6,8 @@ import sqlite3
 import os, re
 import time
 from datetime import datetime
-        
+import random
+import difflib
 class BWModel(dv.DataViewIndexListModel):
     def __init__(self):
         self.data = []
@@ -14,6 +15,9 @@ class BWModel(dv.DataViewIndexListModel):
         self.db = None
         self.db_conn = None
         self.db_curr = None
+        self.filter = {}
+        self.filter['under'] = False
+        self.filter['level'] = 0
     def AddRow(self, value):
         self.data.append(value)
         self.RowAppended()
@@ -64,6 +68,7 @@ class BWModel(dv.DataViewIndexListModel):
 
 
     def DeleteRows(self, rows):
+        print(rows)
         # make a copy since we'll be sorting(mutating) the list
         rows = list(rows)
         # use reverse order so the indexes don't change as we remove items
@@ -74,7 +79,7 @@ class BWModel(dv.DataViewIndexListModel):
             del self.data[row]
             # notify the view(s) using this model that it has been removed
             self.RowDeleted(row)
-
+            
     def data_clear(self):
         rows = []
         for i in range(0,len(self.data)):
@@ -160,6 +165,24 @@ class BWModel(dv.DataViewIndexListModel):
 
         wx.CallAfter(self.RowChanged, row)
         return 0
+
+    def del_question(self, row):
+        print(self.data)
+        i = None
+        print('row',row)
+        try:
+            r = self.data[row]
+
+            i = r[0]
+        except:
+            return -1
+        print('i', i)
+        self.db_curr.execute("delete from question where idx = ?", (i,))
+        self.db_curr.execute("delete from solution where question_id = ?",(i,))
+        self.db_conn.commit()
+
+        wx.CallAfter(self.DeleteRows , [int(row)])
+        return 0
     def get_question_by_row(self, row):
         i = None
         print('row',row)
@@ -188,4 +211,46 @@ class BWModel(dv.DataViewIndexListModel):
         s = row[0]
         
         return idx, t, q, s, l
+    
+    def filter_changed(self, under, level):
+        self.filter['under'] = under
+        self.filter['level'] = level
+
+    def get_filtered_count(self):
+        if self.filter['under'] :
+            query = "select count(idx) from question where level <= '{}'".format(self.filter['level'])
+        else:
+            query = "select count(idx) from question where level = '{}'".format(self.filter['level'])
+
+        print(query)
+        self.db_curr.execute(query)
+        count = self.db_curr.fetchone()[0]
+        return count
+
+    def get_training_next(self):
+        if self.filter['under'] :
+            query = "select idx, question from question where level <= '{}'".format(self.filter['level'])
+        else:
+            query = "select idx, question from question where level = '{}'".format(self.filter['level'])
+
+        self.db_curr.execute(query)
+        
+        rows = self.db_curr.fetchall()
+        total = len(rows)
+        if total == 0 :
+            return -1, 0
+        
+        i = random.randrange(0, total)
+
+        idx = rows[i][0]
+        q = rows[i][1]
+        return idx, q
+    def get_training_solution(self, idx, answer):
+
+        query = "select solution from solution where question_id = {}".format(idx)
+        self.db_curr.execute(query)
+        solution = self.db_curr.fetchone()[0]
+        sq = difflib.SequenceMatcher(lambda x:x in " ", solution, answer)
+        sq.ratio()
+        return solution, answer, sq.ratio(), sq.get_matching_blocks()
     
